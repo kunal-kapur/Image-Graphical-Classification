@@ -1,5 +1,9 @@
-import torch
+from dataloader import AnimalsDataset
 
-vals = torch.tensor([1, 3])
+data = AnimalsDataset("Animals")
 
-print(torch.nn.functional.one_hot(vals, num_classes=3))
+print(len(data))
+
+for i, sample in enumerate(data):
+    print(i, sample)
+    break

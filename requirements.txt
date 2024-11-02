@@ -3,4 +3,3 @@ matplotlib
 torch 
 torchvision
 kornia
-cv2
