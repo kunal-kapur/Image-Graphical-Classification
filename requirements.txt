@@ -1,0 +1,6 @@
+numpy<2.0
+matplotlib
+torch 
+torchvision
+kornia
+cv2
