@@ -19,11 +19,25 @@ class AnimalsDatasetParquet(Dataset):
     """
     def __init__(self, path):
         super().__init__()
-        df = pd.read_parquet('path/to/your/file.parquet')
-        self.paths = df['path']
-        self.locations = df.iloc[:, :2]
-        self.embedding = df.iloc[:, 2:130]
+        self.df = pd.read_parquet(path=path)
+        self.images = self.df.groupby("path").groups #has coressponding indicies of image
+        self.image_keys = list(self.images.keys())
+        self.NUM_COLUMNS = len(self.df.columns)
+    
+    def __len__(self):
+        return len(self.images)
+    
+    def __getitem__(self, index):
+        chosen_indices = self.images[self.image_keys[index]]
+        locations = torch.from_numpy(self.df.iloc[chosen_indices, 0:2].values)
+        embedding = torch.from_numpy(self.df.iloc[chosen_indices, 2: self.NUM_COLUMNS - 2].values)
+        label = ((self.df.iloc[chosen_indices, self.NUM_COLUMNS - 2].unique()))[0]
+        path = self.image_keys[index]
+        return locations, embedding, label, path
 
+
+
+        
 
 class AnimalsDatasetImage(Dataset):
     """Loading dataset by images"""
