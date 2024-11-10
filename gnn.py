@@ -3,11 +3,13 @@ from torch.types import Tensor
 import torch.nn.functional as F
 from typing import Tuple
 from torch_geometric.data import Data
+from torch_geometric.data import Batch
 from torch_geometric.nn import GCNConv  # Import a GNN layer
+from torch.nn import Linear
 
 
 class GNN(torch.nn.Module):
-   def __init__(self, k: int, metric: str='euclidean'):
+   def __init__(self, k: int, num_nodes:int, metric: str='euclidean'):
       """Graph Neural Network
 
       Args:
@@ -15,12 +17,16 @@ class GNN(torch.nn.Module):
          metric (str): metric to compare neighbors
       """
       super(GNN, self).__init__()
+      EMBEDDING_SIZE = 128
       self.k = k
       self.metric=metric
-      self.conv1 = GCNConv(128, 300)
-      self.conv2 = GCNConv(128, 300)
-      self.conv3 = GCNConv(300, 500)
-      self.conv4 = GCNConv(500, 100)
+      self.num_nodes = num_nodes
+      self.conv1 = GCNConv(EMBEDDING_SIZE, 300, node_dim=1)
+      self.conv2 = GCNConv(300, 100, node_dim=1)
+      self.conv3 = GCNConv(100, 50, node_dim=1)
+      self.conv_layers = [self.conv1, self.conv2, self.conv3]
+      self.linear4 = Linear(num_nodes * 50, 100)
+      self.linear5 = Linear(100, 3)
          
 
    def nearest_neighbor(self, data: Tensor)->Tensor:
@@ -63,8 +69,12 @@ class GNN(torch.nn.Module):
       # Concatenate all batch adjacency lists
       U = torch.cat(U_list)
       V = torch.cat(V_list)
+      val = torch.stack([U, V], dim=0)
+      if len(val.shape) == 2:
+         val = val.unsqueeze(dim=0)
+      return val
 
-      return U, V
+
 
    def forward(self, x: Tensor):
       """Forward pass to network
@@ -72,15 +82,22 @@ class GNN(torch.nn.Module):
       Args:
          x (Tensor): (N, 20, 128) tensor of embeddings 
       """
-      N, num_points, D = x.shape
-      U, V = self.nearest_neighbor(x)
-      print(U)
-      print(V)
+      BATCH, _, _ = x.shape
+      for i in range(len(self.conv_layers)):
+         print("iteration", i, x.shape)
+         N, num_points, D = x.shape
+         edge_index = (self.nearest_neighbor(x))
+         data = Data(x=x, edge_index=edge_index)
 
-      # Reshape x to (N * num_points, D) for graph layers
-      x = x.view(N * num_points, D)
-       
-       
-       
-
-      
+         print(data.edge_index.shape, data.x.shape)
+         x = self.conv_layers[i](data.x, data.edge_index.squeeze(dim=0))
+         print(x.shape)
+         x = F.relu(x)
+         print("DONE")
+      x = x.view(BATCH, -1)
+      print("NEW SHAPE", x.shape)
+      x = self.linear4(x)
+      x = F.relu(x)
+      x = self.linear5(x)
+      print("FINAL shape", x.shape)
+      return F.softmax(x, dim=0)
