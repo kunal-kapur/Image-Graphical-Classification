@@ -5,3 +5,4 @@ torchvision
 kornia
 pandas
 jupyterlab
+torch_geometric
