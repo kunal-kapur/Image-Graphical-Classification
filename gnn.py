@@ -100,4 +100,4 @@ class GNN(torch.nn.Module):
       x = F.relu(x)
       x = self.linear5(x)
       print("FINAL shape", x.shape)
-      return F.softmax(x, dim=0)
+      return F.softmax(x, dim=1)

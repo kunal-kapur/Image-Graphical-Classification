@@ -1,34 +1,42 @@
 from dataloader import AnimalsDatasetImage
 import pyarrow as pa
 import pyarrow.parquet as pq
-from torch.types import Tensor
-import torch
 import pandas as pd
+from tqdm import tqdm
+import torch
 
 data = AnimalsDatasetImage("Animals")
-
 print(len(data))
-names=['y', 'x']
-for i in range(128):
-    names.append(f"feature_{i}")
+
+names = ['y', 'x'] + [f"feature_{i}" for i in range(128)]
+
+# Initialize PyArrow table writer
+parquet_file = 'animals.parquet'
+writer = None
 
 label_list = []
 path_list = []
-dimension_arr = torch.tensor([])
-for i, sample in enumerate(data):
-    loc: Tensor
-    description: Tensor
-    label: Tensor
-    path: str
+
+for i, sample in tqdm(enumerate(data)):
     loc, description, label, path = sample
-    combined = torch.concat((loc, description), dim=1)
-    dimension_arr = torch.concat((dimension_arr, combined))
-    path_list += [path] * combined.shape[0]
-    label_list += [data.get_label(label)] * combined.shape[0]
+    combined = torch.concat((loc, description), dim=1).detach().numpy()
 
-df = pd.DataFrame(data=dimension_arr.detach().numpy(),  columns=names)
-df['label'] = label_list
-df['path'] = path_list
+    paths = [path] * combined.shape[0]
+    labels = [data.get_label(label)] * combined.shape[0]
 
-df.to_parquet('animals.parquet')
+    # Create DataFrame for the current batch
+    df = pd.DataFrame(data=combined, columns=names)
+    df['label'] = labels
+    df['path'] = paths
 
+    # Convert DataFrame to PyArrow table and write in batches
+    table = pa.Table.from_pandas(df)
+    if writer is None:
+        writer = pq.ParquetWriter(parquet_file, table.schema)
+    writer.write_table(table)
+
+# Close the writer
+if writer:
+    writer.close()
+
+print(f"Data written to {parquet_file} in chunks.")

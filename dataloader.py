@@ -54,7 +54,7 @@ class AnimalsDatasetImage(Dataset):
             self.image_paths.append((os.path.join(path, "dogs", i), torch.tensor([0, 1, 0])))
 
         for i in os.listdir(os.path.join(path, "snakes")):
-            self.image_paths.append((os.path.join(path, "snakes"), torch.tensor([0, 0, 1])))
+            self.image_paths.append((os.path.join(path, "snakes", i), torch.tensor([0, 0, 1])))
 
     def __len__(self):
         return len(self.image_paths)
