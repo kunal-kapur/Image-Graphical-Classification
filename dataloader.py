@@ -27,6 +27,29 @@ class AnimalsDatasetParquet(Dataset):
     def __len__(self):
         return len(self.images)
     
+    def map_label(self, input):
+        map = {"dog": 0, "cat": 1, "snake": 2}
+        num_classes = len(map)
+
+        if isinstance(input, str):
+            index = map.get(input, None)
+            if index is None:
+                raise ValueError(f"Invalid input: {input} is not a recognized label.")
+            one_hot = torch.zeros(num_classes)
+            one_hot[index] = 1
+            return one_hot
+
+        elif isinstance(input, tuple):
+            new_vals = []
+            for i in input:
+                new_vals.append(map[i])
+            return torch.tensor(new_vals)
+    
+        else:
+            raise TypeError("Input must be a string or a 1-dimensional tensor.")
+
+            
+    
     def __getitem__(self, index):
         chosen_indices = self.images[self.image_keys[index]]
         locations = torch.from_numpy(self.df.iloc[chosen_indices, 0:2].values)

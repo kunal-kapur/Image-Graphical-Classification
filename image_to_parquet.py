@@ -4,6 +4,7 @@ import pyarrow.parquet as pq
 import pandas as pd
 from tqdm import tqdm
 import torch
+import os
 
 data = AnimalsDatasetImage("Animals")
 print(len(data))
@@ -12,6 +13,12 @@ names = ['y', 'x'] + [f"feature_{i}" for i in range(128)]
 
 # Initialize PyArrow table writer
 parquet_file = 'animals.parquet'
+
+if os.path.exists(parquet_file):
+    print("CHECK DATA IF DATA CAN BE DELTED")
+    raise ValueError
+
+
 writer = None
 
 label_list = []

@@ -84,20 +84,13 @@ class GNN(torch.nn.Module):
       """
       BATCH, _, _ = x.shape
       for i in range(len(self.conv_layers)):
-         print("iteration", i, x.shape)
          N, num_points, D = x.shape
          edge_index = (self.nearest_neighbor(x))
          data = Data(x=x, edge_index=edge_index)
-
-         print(data.edge_index.shape, data.x.shape)
          x = self.conv_layers[i](data.x, data.edge_index.squeeze(dim=0))
-         print(x.shape)
          x = F.relu(x)
-         print("DONE")
       x = x.view(BATCH, -1)
-      print("NEW SHAPE", x.shape)
       x = self.linear4(x)
       x = F.relu(x)
       x = self.linear5(x)
-      print("FINAL shape", x.shape)
       return F.softmax(x, dim=1)
