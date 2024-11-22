@@ -7,11 +7,13 @@ import os
 import torch
 from PIL import Image
 import kornia as kornia
+from kornia.feature.scale_space_detector import get_default_detector_config
 from torchvision import transforms
 from helpers import compute_harris_response, get_harris_points
 import pandas as pd
 from typing import Union, Tuple
 from torch.types import Tensor
+import math
 
 
 class AnimalsDatasetParquet(Dataset):
@@ -58,15 +60,11 @@ class AnimalsDatasetParquet(Dataset):
         path = self.image_keys[index]
         return locations, embedding, label, path
 
-
-
-        
-
 class AnimalsDatasetImage(Dataset):
     """Loading dataset by images"""
-    def __init__(self, path):
-        self.keynet = kornia.feature.KeyNetDetector(pretrained=True, num_features=20)
-        self.sift = kornia.feature.SIFTDescriptor(21, 8, 4)
+    def __init__(self, path, distance=10):
+        
+        self.distance = distance
         self.image_paths = []
         self.mapping = {0:"cat", 1: "dog", 2: "snake"}
 
@@ -84,20 +82,7 @@ class AnimalsDatasetImage(Dataset):
     
     def get_label(self, val):
         return self.mapping[torch.argmax(val).item()]
-    def _get_keypoints(self, img):
-        """
-        Extract keypoints from the image.
 
-        Inputs:
-            img: h x w tensor.
-        Outputs:
-            keypoints: N x 2 numpy array.
-        """
-        keypoints = None
-        harrisim = compute_harris_response(img.unsqueeze(dim=0).unsqueeze(dim=0))
-        keypoints = (get_harris_points(harrisim, min_distance=15))
-        keypoints = torch.tensor(keypoints)
-        return keypoints
     
     def _get_descriptors(self, img, keypoints):
         """
@@ -132,9 +117,11 @@ class AnimalsDatasetImage(Dataset):
         # Define the transformation
         grayscale_transform = transforms.Grayscale()
         grayscale_image = grayscale_transform(image)
-        tensor_image = transforms.ToTensor()(grayscale_image).unsqueeze(dim=0)
-        keypoints = self.keynet.forward(tensor_image)[0]
-        pixel_locations = keypoints[:, :, :2, 2].squeeze(dim=0) # take x, y coordinates
+        tensor_image = transforms.ToTensor()(grayscale_image).squeeze(dim=0)
+        harrisim = compute_harris_response(tensor_image.squeeze(dim=0).squeeze(dim=0))
+        keypoints = (get_harris_points(harrisim, min_distance=self.distance))
+        keypoints = torch.tensor(keypoints)
+        pixel_locations = keypoints # take x, y coordinates
         desc = self._get_descriptors(img=tensor_image.squeeze(dim=0).squeeze(dim=0), 
                                      keypoints=pixel_locations)
         return  pixel_locations, desc, label, img_path
