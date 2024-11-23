@@ -120,6 +120,8 @@ class AnimalsDatasetImage(Dataset):
         tensor_image = transforms.ToTensor()(grayscale_image).squeeze(dim=0)
         harrisim = compute_harris_response(tensor_image.squeeze(dim=0).squeeze(dim=0))
         keypoints = (get_harris_points(harrisim, min_distance=self.distance))
+        if len(keypoints) <= 5:
+            return None, None, None, None
         keypoints = torch.tensor(keypoints)
         pixel_locations = keypoints # take x, y coordinates
         desc = self._get_descriptors(img=tensor_image.squeeze(dim=0).squeeze(dim=0), 

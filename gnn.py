@@ -6,10 +6,12 @@ from torch_geometric.data import Data
 from torch_geometric.data import Batch
 from torch_geometric.nn import GCNConv  # Import a GNN layer
 from torch.nn import Linear
+import matplotlib.pyplot as plt
+import numpy as np
 
 
 class GNN(torch.nn.Module):
-   def __init__(self, k: int, num_nodes:int, metric: str='euclidean'):
+   def __init__(self, k: int, metric: str='euclidean'):
       """Graph Neural Network
 
       Args:
@@ -20,13 +22,13 @@ class GNN(torch.nn.Module):
       EMBEDDING_SIZE = 128
       self.k = k
       self.metric=metric
-      self.num_nodes = num_nodes
-      self.conv1 = GCNConv(EMBEDDING_SIZE, 300, node_dim=1)
-      self.conv2 = GCNConv(300, 100, node_dim=1)
-      self.conv3 = GCNConv(100, 50, node_dim=1)
+      self.conv1 = GCNConv(EMBEDDING_SIZE, 256, node_dim=1)
+      self.conv2 = GCNConv(256, 512, node_dim=1)
+      self.conv3 = GCNConv(512, 128, node_dim=1)
       self.conv_layers = [self.conv1, self.conv2, self.conv3]
-      self.linear4 = Linear(num_nodes * 50, 100)
-      self.linear5 = Linear(100, 3)
+
+      self.linear4 = Linear(128, 64)
+      self.linear5 = Linear(64, 3)
          
 
    def nearest_neighbor(self, data: Tensor)->Tensor:
@@ -67,29 +69,61 @@ class GNN(torch.nn.Module):
             V_list.append(V)
 
       # Concatenate all batch adjacency lists
-      U = torch.cat(U_list)
-      V = torch.cat(V_list)
-      val = torch.stack([U, V], dim=0)
-      if len(val.shape) == 2:
-         val = val.unsqueeze(dim=0)
+      U = torch.stack(U_list, dim=0)
+      V = torch.stack(V_list, dim=0)
+      val = torch.stack([U, V], dim=1)
+
       return val
+   
+
+   def plot_image(self, image_path, edges, coordinates):
+      image = plt.imread(image_path)
+      y, x = coordinates[:, 0], coordinates[:, 1]
+      fig, ax = plt.subplots()
+      ax.imshow(image)
+      ax.scatter(x.numpy(), y.numpy(), edgecolors='blue',  # Box color
+      facecolors='none',  # Empty box
+      marker='s', s=30)
+      for edge in edges.T:
+         origin, dest = coordinates[edge[0]], coordinates[edge[1]]
+         ax.plot([origin[1], dest[1]], [origin[0], dest[0]], color='red', linewidth=0.1, label='Line 1')
+         ax.annotate(
+        '',  # No text
+        xy=(dest[1], dest[0]),  # Destination point
+        xytext=(origin[1], origin[0]),  # Origin point
+        arrowprops=dict(arrowstyle='->', color='red', lw=1)
+    )
+      # ax.plot(x_starts.numpy(), y_starts.numpy(), color='red', linewidth=2)
+      plt.show()
 
 
 
-   def forward(self, x: Tensor):
+   def forward(self, x: Tensor, intermediate_graphs:bool=False, coordinates: Tensor=None, image_path: str=""):
       """Forward pass to network
 
       Args:
          x (Tensor): (N, 20, 128) tensor of embeddings 
       """
+      
       BATCH, _, _ = x.shape
+
+
+      if intermediate_graphs is True and coordinates is None:
+         raise ValueError("Please add coordinates")
+      
+      if intermediate_graphs is True and BATCH > 1:
+         raise ValueError("Batch processing of over 1 not supported for graphing")
+
+
       for i in range(len(self.conv_layers)):
          N, num_points, D = x.shape
          edge_index = (self.nearest_neighbor(x))
+         if intermediate_graphs is True:
+            self.plot_image(image_path=image_path, edges=edge_index.squeeze(dim=0), coordinates=coordinates.squeeze(dim=0))
          data = Data(x=x, edge_index=edge_index)
          x = self.conv_layers[i](data.x, data.edge_index.squeeze(dim=0))
          x = F.relu(x)
-      x = x.view(BATCH, -1)
+      x = x.mean(dim=1)
       x = self.linear4(x)
       x = F.relu(x)
       x = self.linear5(x)

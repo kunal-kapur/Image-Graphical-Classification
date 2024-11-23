@@ -6,11 +6,13 @@ from tqdm import tqdm
 
 
 
+torch.manual_seed(10)
+
 # num nodes is hard coded to be 20, can't change without change in parquet
 model = GNN(k=5, num_nodes=20)
 
 LR = 0.001
-BATCH_SIZE = 16
+BATCH_SIZE = 1
 EPOCHS = 10
 
 torch.manual_seed(0)
@@ -18,33 +20,50 @@ data = AnimalsDatasetParquet("animals.parquet")
 
 
 print(len(data))
-train, _ = random_split(data, lengths=[500, len(data) - 500])
+train, val, _ = random_split(data, lengths=[1000, 500, len(data) - 1500])
 
 print(len(data))
 
 dataloader = DataLoader(train, batch_size=BATCH_SIZE)
+
+dataloader_val = DataLoader(val, batch_size=BATCH_SIZE)
 
 optimizer = torch.optim.Adam(model.parameters())
 loss_func = torch.nn.CrossEntropyLoss()
 optimizer = torch.optim.Adam(model.parameters(), lr=LR)
 
 
-
 model.train()
-for epoch in range(EPOCHS):
-    tot_correct = 0
+for epoch in tqdm(range(EPOCHS)):
+    tot_correct_train = 0
+    tot_correct_val = 0
+    model.train()
     for i, val in tqdm(enumerate(dataloader)):
+        if i < 110:
+            continue
         coords, inputs, targets, paths = val
 
         targets = data.map_label(targets) # make labels into integers
 
-        out = model.forward(inputs)
+
+        out = model.forward(inputs, intermediate_graphs=True, coordinates=coords, image_path=paths[0])
 
         loss = loss_func(out, targets)
-        tot_correct += torch.sum(out.argmax(dim=1) == targets)
+        tot_correct_train += torch.sum(out.argmax(dim=1) == targets)
 
-        with torch.no_grad():
-            optimizer.zero_grad()
-            loss.backward()
-            optimizer.step()
-    print(tot_correct / 500)
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
+    model.eval()
+    with torch.no_grad():
+        for i, val in tqdm(enumerate(dataloader)):
+            coords, inputs, targets, paths = val
+
+            targets = data.map_label(targets) # make labels into integers
+            out = model.forward(inputs)
+            loss = loss_func(out, targets)
+            tot_correct_val += torch.sum(out.argmax(dim=1) == targets)
+
+    
+    print("train", tot_correct_train / 1000)
+    print("val", tot_correct_val / 1000)

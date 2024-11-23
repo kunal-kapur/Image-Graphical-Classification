@@ -6,7 +6,7 @@ from tqdm import tqdm
 import torch
 import os
 
-data = AnimalsDatasetImage("Animals")
+data = AnimalsDatasetImage("Animals", distance=15)
 print(len(data))
 
 names = ['y', 'x'] + [f"feature_{i}" for i in range(128)]
@@ -26,6 +26,11 @@ path_list = []
 
 for i, sample in tqdm(enumerate(data)):
     loc, description, label, path = sample
+
+    if loc is None:
+        continue
+    loc = loc[0:20]
+    description = description[0:20]
     combined = torch.concat((loc, description), dim=1).detach().numpy()
 
     paths = [path] * combined.shape[0]
