@@ -1,0 +1,156 @@
+from dataloader import AnimalsDatasetParquet, AnimalsDatasetImage
+from gnn import GNN
+import torch
+from torch.utils.data import DataLoader, Dataset, random_split
+from tqdm import tqdm
+import matplotlib.pyplot as plt
+import numpy as np
+import os
+from image_to_parquet import animals_parquet
+from torch.optim.lr_scheduler import StepLR
+
+
+import argparse
+
+
+
+torch.manual_seed(1)
+
+parser = argparse.ArgumentParser()
+
+parser.add_argument('-d', "--dataset", default="animals")   
+parser.add_argument("--distance", default=15)   
+parser.add_argument('-e', "--epochs", default=10)    
+parser.add_argument('-b', "--batch", default=1)    
+parser.add_argument('-k', "--neighbors", default=3)    
+parser.add_argument('-l', "--lr", default=0.001)
+parser.add_argument('-s', "--schedule", default=5)      
+
+args = parser.parse_args()
+K = int(args.neighbors)
+model = GNN(k=K)
+
+print(args)
+
+LR = float(args.lr)
+BATCH_SIZE = int(args.batch)
+EPOCHS = int(args.epochs)
+DIST = int(args.distance)
+
+torch.manual_seed(0)
+
+
+dataset_type = args.dataset
+
+
+parquet_path = f"{dataset_type}_{DIST}.parquet"
+
+if not os.path.exists(parquet_path):
+    animals_parquet(DIST)
+
+data = AnimalsDatasetParquet(parquet_path)
+
+
+train, validation, test = random_split(data, lengths=[0.7, 0.15, 0.15])
+
+dataloader = DataLoader(train, batch_size=BATCH_SIZE)
+
+dataloader_validation = DataLoader(validation, batch_size=BATCH_SIZE)
+
+optimizer = torch.optim.Adam(model.parameters())
+loss_func = torch.nn.CrossEntropyLoss()
+optimizer = torch.optim.Adam(model.parameters(), lr=LR)
+
+
+scheduler = StepLR(optimizer, step_size=5)
+
+model.train()
+
+train_loss_list, val_loss_list = [], []
+train_acc_list, val_acc_list = [], []
+for epoch in tqdm(range(EPOCHS)):
+    tot_correct_train = 0
+    tot_correct_val = 0
+    model.train()
+    tot_c1, tot_c2, tot_c3 = 0, 0, 0
+    correct_c1, correct_c2, correct_c3 = 0, 0, 0
+    train_loss, val_loss = 0, 0
+    for i, val in tqdm(enumerate(dataloader)):
+        coords, inputs, targets, paths = val
+        targets = data.map_label(targets) # make labels into integers
+
+        tot_c1, tot_c2, tot_c3 = torch.sum(targets == 0), torch.sum(targets == 1), torch.sum(targets == 2)
+        out = model.forward(inputs)
+        loss = loss_func(out, targets)
+        train_loss += loss
+        tot_correct_train += torch.sum(out.argmax(dim=1) == targets)
+
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
+    model.eval()
+    with torch.no_grad():
+        for i, val in tqdm(enumerate(dataloader_validation)):
+            coords, inputs, targets, paths = val
+            targets = data.map_label(targets) # make labels into integers
+            out = model.forward(inputs)
+            loss = loss_func(out, targets)
+            val_loss += loss
+            tot_correct_val += torch.sum(out.argmax(dim=1) == targets)
+    print(tot_correct_val, len(validation))
+    print("Train accuracy: ", (tot_correct_train / len(train)).item())
+    print("Validation accuracy", (tot_correct_val / len(validation)).item())
+    train_acc_list.append((tot_correct_train / len(train)).item())
+    val_acc_list.append((tot_correct_val / len(validation)).item())
+
+    train_loss_list.append((train_loss / len(train)).item())
+    val_loss_list.append((val_loss / len(validation)).item())
+
+    scheduler.step()
+
+
+tot_correct_test = 0
+with torch.no_grad():
+    for i, val in tqdm(enumerate(test)):
+        coords, inputs, targets, paths = val
+        targets = data.map_label((targets,)) # make labels into integers
+        out = model.forward(torch.unsqueeze(inputs, dim=0))
+        tot_correct_test += torch.sum(out.argmax(dim=1) == targets)
+
+test_acc = (tot_correct_test / len(test)).item()
+print("Test accuracy ", test_acc)
+
+
+PATH = f"results/{dataset_type}_dist{DIST}_k{K}_epochs{EPOCHS}_batch{BATCH_SIZE}"
+if not os.path.exists(PATH):
+    os.makedirs(PATH)
+
+x = np.arange(EPOCHS)
+plt.figure()
+plt.plot(x, train_loss_list, label="training")
+plt.plot(x, val_loss_list, label="validation")
+plt.title('Training Loss')
+plt.legend()
+plt.savefig(os.path.join(PATH, 'training_curve_loss.png'))  # Save the plot
+
+plt.figure()
+plt.plot(x, train_acc_list, label="training")
+plt.plot(x, val_acc_list, label="validation")
+plt.title('Training Accuracy')
+plt.legend()
+plt.savefig(os.path.join(PATH, 'training_curve_accuracy.png'))  # Save the plot
+
+with open(os.path.join(PATH, "test_acc.txt"), 'w') as f:
+    f.write(f"Test Accuracy: {test_acc}")
+
+torch.save(model.state_dict(), os.path.join(PATH, 'model_weights.pth'))
+
+with open(os.path.join(PATH, "training.txt"), 'w') as f:
+    f.write(f"train loss: {train_loss_list}\n")
+    f.write(f"validation loss: {val_loss_list}\n")
+    f.write(f"train acc: {train_acc_list}\n")
+    f.write(f"train acc: {val_acc_list}")
+
+
+
+

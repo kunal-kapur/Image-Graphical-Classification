@@ -6,49 +6,45 @@ from tqdm import tqdm
 import torch
 import os
 
-data = AnimalsDatasetImage("Animals", distance=15)
-print(len(data))
 
-names = ['y', 'x'] + [f"feature_{i}" for i in range(128)]
+def animals_parquet(dist=15):
+    data = AnimalsDatasetImage("Animals", distance=15)
 
-# Initialize PyArrow table writer
-parquet_file = 'animals.parquet'
+    names = ['y', 'x'] + [f"feature_{i}" for i in range(128)]
 
-if os.path.exists(parquet_file):
-    print("CHECK DATA IF DATA CAN BE DELTED")
-    raise ValueError
+    # Initialize PyArrow table writer
+    parquet_file = f'animals_{dist}.parquet'
 
+    if os.path.exists(parquet_file):
+        print("CHECK DATA IF DATA CAN BE DELTED")
+        raise ValueError
+    writer = None
 
-writer = None
+    for i, sample in tqdm(enumerate(data)):
+        loc, description, label, path = sample
 
-label_list = []
-path_list = []
+        if loc is None:
+            continue
+        loc = loc[0:20]
+        description = description[0:20]
+        combined = torch.concat((loc, description), dim=1).detach().numpy()
 
-for i, sample in tqdm(enumerate(data)):
-    loc, description, label, path = sample
+        paths = [path] * combined.shape[0]
+        labels = [data.get_label(label)] * combined.shape[0]
 
-    if loc is None:
-        continue
-    loc = loc[0:20]
-    description = description[0:20]
-    combined = torch.concat((loc, description), dim=1).detach().numpy()
+        # Create DataFrame for the current batch
+        df = pd.DataFrame(data=combined, columns=names)
+        df['label'] = labels
+        df['path'] = paths
 
-    paths = [path] * combined.shape[0]
-    labels = [data.get_label(label)] * combined.shape[0]
+        # Convert DataFrame to PyArrow table and write in batches
+        table = pa.Table.from_pandas(df)
+        if writer is None:
+            writer = pq.ParquetWriter(parquet_file, table.schema)
+        writer.write_table(table)
 
-    # Create DataFrame for the current batch
-    df = pd.DataFrame(data=combined, columns=names)
-    df['label'] = labels
-    df['path'] = paths
+    # Close the writer
+    if writer:
+        writer.close()
 
-    # Convert DataFrame to PyArrow table and write in batches
-    table = pa.Table.from_pandas(df)
-    if writer is None:
-        writer = pq.ParquetWriter(parquet_file, table.schema)
-    writer.write_table(table)
-
-# Close the writer
-if writer:
-    writer.close()
-
-print(f"Data written to {parquet_file} in chunks.")
+    print(f"Data written to {parquet_file} in chunks.")

@@ -23,19 +23,19 @@ class GNN(torch.nn.Module):
       self.k = k
       self.metric=metric
       self.conv1 = GCNConv(EMBEDDING_SIZE, 256, node_dim=1)
-      self.conv2 = GCNConv(256, 512, node_dim=1)
-      self.conv3 = GCNConv(512, 128, node_dim=1)
+      self.conv2 = GCNConv(256, 128, node_dim=1)
+      self.conv3 = GCNConv(128, 64, node_dim=1)
       self.conv_layers = [self.conv1, self.conv2, self.conv3]
 
-      self.linear4 = Linear(128, 64)
-      self.linear5 = Linear(64, 3)
+      self.linear4 = Linear(64, 32)
+      self.linear5 = Linear(32, 3)
          
 
    def nearest_neighbor(self, data: Tensor)->Tensor:
       """Find the nearest neighbor
 
       Args:
-      data (Tensor): (N, 20, 128) tensor of embeddings 
+      data (Tensor): (N, number_nodes, 128) tensor of embeddings 
 
       Returns:
       Tensor, Tensor: (N, )
@@ -45,6 +45,8 @@ class GNN(torch.nn.Module):
       # Initialize lists to collect edges
       U_list = []
       V_list = []
+
+      needed_points = min(num_points, self.k + 1)
       
       for i in range(N):
             batch_data = data[i]  # Shape (20, 128), embeddings for one element in the batch
@@ -57,11 +59,12 @@ class GNN(torch.nn.Module):
                raise ValueError("Unsupported metric. Use 'euclidean' or 'cosine'.")
 
             # Get k nearest neighbors (excluding self)
-            _, indices = torch.topk(dist, self.k + 1, largest=False)  # takes the closest points
-            indices = indices[:, 1:]
+            _, indices = torch.topk(dist, min(self.k + 1, num_points), largest=False)  # takes the closest points
+            indices = indices[:, 1:] # exclude self
 
             # repeat each element k times to create edge
-            U = torch.arange(num_points).repeat_interleave(self.k)
+            U = torch.arange(num_points).repeat_interleave(min(self.k, num_points - 1))
+
             V = indices.flatten()
 
             # Store adjacency list for this batch element

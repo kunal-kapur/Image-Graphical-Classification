@@ -1,0 +1,1 @@
+python train_animals.py -e 18 -k 3

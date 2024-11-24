@@ -13,7 +13,6 @@ from helpers import compute_harris_response, get_harris_points
 import pandas as pd
 from typing import Union, Tuple
 from torch.types import Tensor
-import math
 
 
 class AnimalsDatasetParquet(Dataset):
@@ -58,6 +57,7 @@ class AnimalsDatasetParquet(Dataset):
         embedding = torch.from_numpy(self.df.iloc[chosen_indices, 2: self.NUM_COLUMNS - 2].values)
         label = ((self.df.iloc[chosen_indices, self.NUM_COLUMNS - 2].unique()))[0]
         path = self.image_keys[index]
+        
         return locations, embedding, label, path
 
 class AnimalsDatasetImage(Dataset):
@@ -69,19 +69,41 @@ class AnimalsDatasetImage(Dataset):
         self.mapping = {0:"cat", 1: "dog", 2: "snake"}
 
         for i in os.listdir(os.path.join(path, "cats")):
-            self.image_paths.append((os.path.join(path, "cats", i), torch.tensor([1, 0, 0])))
+            self.image_paths.append((os.path.join(path, "cats", i), 0))
 
         for i in os.listdir(os.path.join(path, "dogs")):
-            self.image_paths.append((os.path.join(path, "dogs", i), torch.tensor([0, 1, 0])))
+            self.image_paths.append((os.path.join(path, "dogs", i), 1))
 
         for i in os.listdir(os.path.join(path, "snakes")):
-            self.image_paths.append((os.path.join(path, "snakes", i), torch.tensor([0, 0, 1])))
+            self.image_paths.append((os.path.join(path, "snakes", i), 2))
 
     def __len__(self):
         return len(self.image_paths)
     
     def get_label(self, val):
         return self.mapping[torch.argmax(val).item()]
+    
+    def map_label(self, input):
+        map = {"dog": 0, "cat": 1, "snake": 2}
+        num_classes = len(map)
+
+        if isinstance(input, str):
+            index = map.get(input, None)
+            if index is None:
+                raise ValueError(f"Invalid input: {input} is not a recognized label.")
+            one_hot = torch.zeros(num_classes)
+            one_hot[index] = 1
+            return one_hot
+
+        elif isinstance(input, tuple):
+            new_vals = []
+            for i in input:
+                new_vals.append(map[i])
+            return torch.tensor(new_vals)
+    
+        else:
+            raise TypeError("Input must be a string or a 1-dimensional tensor.")
+
 
     
     def _get_descriptors(self, img, keypoints):
