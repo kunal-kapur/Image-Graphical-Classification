@@ -21,10 +21,9 @@ parser = argparse.ArgumentParser()
 parser.add_argument('-d', "--dataset", default="animals")   
 parser.add_argument("--distance", default=15)   
 parser.add_argument('-e', "--epochs", default=10)    
-parser.add_argument('-b', "--batch", default=1)    
 parser.add_argument('-k', "--neighbors", default=3)    
 parser.add_argument('-l', "--lr", default=0.001)
-parser.add_argument('-s', "--schedule", default=5)      
+parser.add_argument('-s', "--schedule", default=6)      
 
 args = parser.parse_args()
 K = int(args.neighbors)
@@ -33,7 +32,7 @@ model = GNN(k=K)
 print(args)
 
 LR = float(args.lr)
-BATCH_SIZE = int(args.batch)
+BATCH_SIZE = 1
 EPOCHS = int(args.epochs)
 DIST = int(args.distance)
 
@@ -62,7 +61,9 @@ loss_func = torch.nn.CrossEntropyLoss()
 optimizer = torch.optim.Adam(model.parameters(), lr=LR)
 
 
-scheduler = StepLR(optimizer, step_size=5)
+# use a scheduler to get stable training since batch size is 1
+SCHEDULE = args.schedule
+scheduler = StepLR(optimizer, step_size=SCHEDULE)
 
 model.train()
 
@@ -110,18 +111,40 @@ for epoch in tqdm(range(EPOCHS)):
 
 
 tot_correct_test = 0
+
+class_totals = {}
+class_correct = {}
 with torch.no_grad():
     for i, val in tqdm(enumerate(test)):
         coords, inputs, targets, paths = val
         targets = data.map_label((targets,)) # make labels into integers
+        unique_classes = torch.unique(targets).tolist()
+        # Ensure all classes are in the dictionaries
+        for class_name in unique_classes:
+            if class_name not in class_totals:
+                class_totals[class_name] = 0
+                class_correct[class_name] = 0
+        # Update class-wise total counts
+        for class_name in unique_classes:
+            class_totals[class_name] += torch.sum(targets == class_name).item()
         out = model.forward(torch.unsqueeze(inputs, dim=0))
         tot_correct_test += torch.sum(out.argmax(dim=1) == targets)
 
 test_acc = (tot_correct_test / len(test)).item()
+
+# total test accuracy 
 print("Test accuracy ", test_acc)
 
+# Per-class accuracy
+print("Per-Class Accuracy:")
+for class_name in sorted(class_totals.keys()):
+    total = class_totals[class_name]
+    correct = class_correct[class_name]
+    acc = correct / total if total > 0 else 0
+    print(f"Class {class_name} Accuracy: {acc * 100:.2f}%")
 
-PATH = f"results/{dataset_type}_dist{DIST}_k{K}_epochs{EPOCHS}_batch{BATCH_SIZE}"
+
+PATH = f"results/{dataset_type}_dist{DIST}_k{K}_epochs{EPOCHS}_schedule{SCHEDULE}"
 if not os.path.exists(PATH):
     os.makedirs(PATH)
 
@@ -142,6 +165,11 @@ plt.savefig(os.path.join(PATH, 'training_curve_accuracy.png'))  # Save the plot
 
 with open(os.path.join(PATH, "test_acc.txt"), 'w') as f:
     f.write(f"Test Accuracy: {test_acc}")
+    for class_name in sorted(class_totals.keys()):
+        total = class_totals[class_name]
+        correct = class_correct[class_name]
+        acc = correct / total if total > 0 else 0
+        print(f"Class {class_name} Accuracy: {acc * 100:.2f}%")
 
 torch.save(model.state_dict(), os.path.join(PATH, 'model_weights.pth'))
 
