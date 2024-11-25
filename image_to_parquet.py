@@ -30,8 +30,8 @@ def animals_parquet(dist=15):
         combined = torch.concat((loc, description), dim=1).detach().numpy()
 
         paths = [path] * combined.shape[0]
-        labels = [data.get_label(label)] * combined.shape[0]
-
+        labels = [data.mapping[label]] * combined.shape[0]
+        
         # Create DataFrame for the current batch
         df = pd.DataFrame(data=combined, columns=names)
         df['label'] = labels
