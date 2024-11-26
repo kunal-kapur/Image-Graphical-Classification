@@ -45,6 +45,7 @@ dataset_type = args.dataset
 parquet_path = f"{dataset_type}_{DIST}.parquet"
 
 if not os.path.exists(parquet_path):
+    print(f"Creating {parquet_path}")
     animals_parquet(DIST)
 
 data = AnimalsDatasetParquet(parquet_path)
@@ -62,7 +63,7 @@ optimizer = torch.optim.Adam(model.parameters(), lr=LR)
 
 
 # use a scheduler to get stable training since batch size is 1
-SCHEDULE = args.schedule
+SCHEDULE = int(args.schedule)
 scheduler = StepLR(optimizer, step_size=SCHEDULE)
 
 model.train()
@@ -124,13 +125,20 @@ with torch.no_grad():
             if class_name not in class_totals:
                 class_totals[class_name] = 0
                 class_correct[class_name] = 0
-        # Update class-wise total counts
+
         for class_name in unique_classes:
             class_totals[class_name] += torch.sum(targets == class_name).item()
         out = model.forward(torch.unsqueeze(inputs, dim=0))
-        tot_correct_test += torch.sum(out.argmax(dim=1) == targets)
+        preds = out.argmax(dim=1)
+        
+        # Update class-wise correct counts
+        for cls in unique_classes:
+            class_correct[cls] += torch.sum((preds == cls) & (targets == cls)).item()
+        
+        # Update total correct predictions
+        tot_correct_test += torch.sum(preds == targets).item()
 
-test_acc = (tot_correct_test / len(test)).item()
+test_acc = (tot_correct_test / len(test))
 
 # total test accuracy 
 print("Test accuracy ", test_acc)
@@ -141,10 +149,12 @@ for class_name in sorted(class_totals.keys()):
     total = class_totals[class_name]
     correct = class_correct[class_name]
     acc = correct / total if total > 0 else 0
+    print(correct, total)
     print(f"Class {class_name} Accuracy: {acc * 100:.2f}%")
 
 
-PATH = f"results/{dataset_type}_dist{DIST}_k{K}_epochs{EPOCHS}_schedule{SCHEDULE}"
+params = f"{dataset_type}_dist{DIST}_k{K}_epochs{EPOCHS}_schedule{SCHEDULE}"
+PATH = f"results/{params}"
 if not os.path.exists(PATH):
     os.makedirs(PATH)
 
@@ -152,24 +162,24 @@ x = np.arange(EPOCHS)
 plt.figure()
 plt.plot(x, train_loss_list, label="training")
 plt.plot(x, val_loss_list, label="validation")
-plt.title('Training Loss')
+plt.title(f'Training Loss {params}')
 plt.legend()
 plt.savefig(os.path.join(PATH, 'training_curve_loss.png'))  # Save the plot
 
 plt.figure()
 plt.plot(x, train_acc_list, label="training")
 plt.plot(x, val_acc_list, label="validation")
-plt.title('Training Accuracy')
+plt.title(f'Training Accuracy {params}')
 plt.legend()
 plt.savefig(os.path.join(PATH, 'training_curve_accuracy.png'))  # Save the plot
 
 with open(os.path.join(PATH, "test_acc.txt"), 'w') as f:
-    f.write(f"Test Accuracy: {test_acc}")
+    f.write(f"Test Accuracy: {test_acc}\n")
     for class_name in sorted(class_totals.keys()):
         total = class_totals[class_name]
         correct = class_correct[class_name]
         acc = correct / total if total > 0 else 0
-        print(f"Class {class_name} Accuracy: {acc * 100:.2f}%")
+        f.write(f"Class {class_name} Accuracy: {acc * 100:.2f}%\n")
 
 torch.save(model.state_dict(), os.path.join(PATH, 'model_weights.pth'))
 

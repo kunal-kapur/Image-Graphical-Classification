@@ -8,6 +8,7 @@ from torch_geometric.nn import GCNConv  # Import a GNN layer
 from torch.nn import Linear
 import matplotlib.pyplot as plt
 import numpy as np
+import os
 
 
 class GNN(torch.nn.Module):
@@ -24,11 +25,11 @@ class GNN(torch.nn.Module):
       self.metric=metric
       self.conv1 = GCNConv(EMBEDDING_SIZE, 256, node_dim=1)
       self.conv2 = GCNConv(256, 128, node_dim=1)
-      self.conv3 = GCNConv(128, 64, node_dim=1)
-      self.conv_layers = [self.conv1, self.conv2, self.conv3]
+      # # self.conv3 = GCNConv(128, 64, node_dim=1)
+      self.conv_layers = [self.conv1, self.conv2]
 
-      self.linear4 = Linear(64, 32)
-      self.linear5 = Linear(32, 3)
+      self.linear4 = Linear(128, 64)
+      self.linear5 = Linear(64, 3)
          
 
    def nearest_neighbor(self, data: Tensor)->Tensor:
@@ -79,7 +80,7 @@ class GNN(torch.nn.Module):
       return val
    
 
-   def plot_image(self, image_path, edges, coordinates):
+   def plot_image(self, image_path, edges, coordinates, iteration):
       image = plt.imread(image_path)
       y, x = coordinates[:, 0], coordinates[:, 1]
       fig, ax = plt.subplots()
@@ -97,7 +98,10 @@ class GNN(torch.nn.Module):
         arrowprops=dict(arrowstyle='->', color='red', lw=1)
     )
       # ax.plot(x_starts.numpy(), y_starts.numpy(), color='red', linewidth=2)
-      plt.show()
+      base_name = os.path.basename(image_path).split('.')[0]
+      dir = os.path.join("graph_results", base_name)
+      os.makedirs(dir, exist_ok=True)
+      plt.savefig(os.path.join(dir, f'iteration_{iteration}.png'))  # Save the plot
 
 
 
@@ -118,14 +122,16 @@ class GNN(torch.nn.Module):
          raise ValueError("Batch processing of over 1 not supported for graphing")
 
 
-      for i in range(len(self.conv_layers)):
+      for i in range(len(self.conv_layers) + 1):
          N, num_points, D = x.shape
          edge_index = (self.nearest_neighbor(x))
          if intermediate_graphs is True:
-            self.plot_image(image_path=image_path, edges=edge_index.squeeze(dim=0), coordinates=coordinates.squeeze(dim=0))
+            self.plot_image(image_path=image_path, edges=edge_index.squeeze(dim=0), coordinates=coordinates.squeeze(dim=0), iteration=i)
+         if i == len(self.conv_layers): # break point
+            continue
          data = Data(x=x, edge_index=edge_index)
          x = self.conv_layers[i](data.x, data.edge_index.squeeze(dim=0))
-         x = F.relu(x)
+         x = F.leaky_relu(x)
       x = x.mean(dim=1)
       x = self.linear4(x)
       x = F.relu(x)
