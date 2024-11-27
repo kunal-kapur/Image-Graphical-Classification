@@ -149,3 +149,99 @@ class AnimalsDatasetImage(Dataset):
         desc = self._get_descriptors(img=tensor_image.squeeze(dim=0).squeeze(dim=0), 
                                      keypoints=pixel_locations)
         return  pixel_locations, desc, label, img_path
+    
+
+
+class BinaryDatasetParquet(Dataset):
+    """More optimized version of accessing dataset to run inference
+    """
+    def __init__(self, path):
+        super().__init__()
+        self.df = pd.read_parquet(path=path)
+    
+    def __len__(self):
+        return len(self.df)
+            
+    
+    def __getitem__(self, index):
+        x = torch.from_numpy(self.df.iloc[index, 0:128].values)
+        y = self.df.loc[index, 'label']
+        x.requires_grad_()
+        return x, y
+
+class BinaryDataImage(Dataset):
+    """Loading dataset by images"""
+    def __init__(self, path, distance=10):
+        
+        self.distance = distance
+        self.image_paths = []
+
+        for i in os.listdir(os.path.join(path, "cats")):
+            self.image_paths.append((os.path.join(path, "cats", i), 1))
+
+        for i in os.listdir(os.path.join(path, "dogs")):
+            self.image_paths.append((os.path.join(path, "dogs", i), 1))
+
+        for i in os.listdir(os.path.join(path, "snakes")):
+            self.image_paths.append((os.path.join(path, "snakes", i), 1))
+
+        for i in os.listdir(os.path.join("images")):
+            self.image_paths.append((os.path.join("images", i), 0))
+
+
+    def __len__(self):
+        return len(self.image_paths)
+    
+    def get_label(self, val):
+        return self.mapping[torch.argmax(val).item()]
+     
+    def _get_descriptors(self, img, keypoints):
+        """
+        Extract descriptors from the image at the given keypoints.
+
+        Inputs:
+            img: h x w tensor.
+            keypoints: N x 2 tensor.
+        Outputs:
+            descriptors: N x D tensor.
+        """
+        descriptors = None
+        patch_size = 32
+        half = patch_size // 2
+
+        descriptors = []
+        hynet = kornia.feature.HyNet(pretrained=True)
+        patches = []
+        img = torch.nn.functional.pad(img.unsqueeze(dim=0), pad=(half, half, half, half), mode='reflect').squeeze(dim=0)
+        
+        for y, x in keypoints:
+            y, x = y + half, x + half # account for the padding
+            y, x = int(y.item()), int(x.item())
+            patch = img[y-half:y+half, x-half:x+half]
+            patches.append(patch)
+        descriptors = hynet(torch.stack(tuple(patches), dim=0).unsqueeze(dim=1))
+        return descriptors
+
+    def __getitem__(self, idx) -> Tuple[Tensor, Tensor, Tensor, str]:
+        img_path, label = self.image_paths[idx]
+        image = Image.open(img_path)
+        # Define the transformation
+        grayscale_transform = transforms.Grayscale()
+        grayscale_image = grayscale_transform(image)
+        tensor_image = transforms.ToTensor()(grayscale_image).squeeze(dim=0)
+        harrisim = compute_harris_response(tensor_image.squeeze(dim=0).squeeze(dim=0))
+        keypoints = (get_harris_points(harrisim, min_distance=self.distance))
+        if len(keypoints) < 5:
+            return None, None
+        keypoints = torch.tensor(keypoints)
+        pixel_locations = keypoints # take x, y coordinates
+        desc = self._get_descriptors(img=tensor_image.squeeze(dim=0).squeeze(dim=0), 
+                                     keypoints=pixel_locations)
+        return  desc, label
+    
+
+
+
+    
+
+

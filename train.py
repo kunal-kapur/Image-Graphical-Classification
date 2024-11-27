@@ -57,7 +57,7 @@ dataloader = DataLoader(train, batch_size=BATCH_SIZE)
 
 dataloader_validation = DataLoader(validation, batch_size=BATCH_SIZE)
 
-optimizer = torch.optim.Adam(model.parameters())
+
 loss_func = torch.nn.CrossEntropyLoss()
 optimizer = torch.optim.Adam(model.parameters(), lr=LR)
 
