@@ -115,11 +115,14 @@ tot_correct_test = 0
 
 class_totals = {}
 class_correct = {}
+num_classes = 3
+confusion_matrix = torch.zeros((num_classes, num_classes), dtype=torch.int64)
 with torch.no_grad():
     for i, val in tqdm(enumerate(test)):
         coords, inputs, targets, paths = val
-        targets = data.map_label((targets,)) # make labels into integers
+        targets = data.map_label((targets,))  # Make labels into integers
         unique_classes = torch.unique(targets).tolist()
+
         # Ensure all classes are in the dictionaries
         for class_name in unique_classes:
             if class_name not in class_totals:
@@ -128,15 +131,24 @@ with torch.no_grad():
 
         for class_name in unique_classes:
             class_totals[class_name] += torch.sum(targets == class_name).item()
+
         out = model.forward(torch.unsqueeze(inputs, dim=0))
         preds = out.argmax(dim=1)
-        
+
+        # Update confusion matrix
+        for t, p in zip(targets, preds):
+            confusion_matrix[t.item(), p.item()] += 1
+
         # Update class-wise correct counts
         for cls in unique_classes:
             class_correct[cls] += torch.sum((preds == cls) & (targets == cls)).item()
-        
+
         # Update total correct predictions
         tot_correct_test += torch.sum(preds == targets).item()
+
+# Convert confusion matrix to numpy for easier visualization (optional)
+confusion_matrix_np = confusion_matrix.numpy()
+
 
 test_acc = (tot_correct_test / len(test))
 
@@ -173,6 +185,37 @@ plt.title(f'Training Accuracy {params}')
 plt.legend()
 plt.savefig(os.path.join(PATH, 'training_curve_accuracy.png'))  # Save the plot
 
+
+plt.figure(figsize=(10, 8))
+plt.imshow(confusion_matrix_np, interpolation='nearest', cmap='Blues')
+plt.colorbar()
+
+# Add labels, title, and axis ticks
+plt.title('Confusion Matrix')
+plt.xlabel('Predicted Labels')
+plt.ylabel('True Labels')
+
+# Add grid lines for better readability
+plt.grid(False)
+
+# Annotate the confusion matrix cells
+num_classes = confusion_matrix_np.shape[0]
+for i in range(num_classes):
+    for j in range(num_classes):
+        plt.text(j, i, f'{confusion_matrix_np[i, j]}',
+                 ha='center', va='center',
+                 color='white' if confusion_matrix_np[i, j] > confusion_matrix_np.max() / 2 else 'black')
+
+# Set tick marks to match classes
+plt.xticks(range(num_classes), [f'Class {i}' for i in range(num_classes)], rotation=45)
+plt.yticks(range(num_classes), [f'Class {i}' for i in range(num_classes)])
+
+plt.tight_layout()
+plt.savefig(os.path.join(PATH, 'confusion matrix'))
+
+
+
+
 with open(os.path.join(PATH, "test_acc.txt"), 'w') as f:
     f.write(f"Test Accuracy: {test_acc}\n")
     for class_name in sorted(class_totals.keys()):
@@ -187,7 +230,7 @@ with open(os.path.join(PATH, "training.txt"), 'w') as f:
     f.write(f"train loss: {train_loss_list}\n")
     f.write(f"validation loss: {val_loss_list}\n")
     f.write(f"train acc: {train_acc_list}\n")
-    f.write(f"train acc: {val_acc_list}")
+    f.write(f"validation acc acc: {val_acc_list}")
 
 
 
