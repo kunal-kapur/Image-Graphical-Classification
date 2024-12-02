@@ -24,7 +24,8 @@ parser.add_argument('-k', "--neighbors", default=3)
 parser.add_argument('-l', "--lr", default=0.001)
 parser.add_argument('-s', "--schedule", default=6)      
 parser.add_argument('-c', "--classified", default=False)    
-parser.add_argument('-n', "--nodes", default=20)    
+parser.add_argument('-n', "--nodes", default=20)
+parser.add_argument('--data', default="Animals")    
 
 args = parser.parse_args()
 K = int(args.neighbors)
@@ -37,6 +38,7 @@ BATCH_SIZE = 1
 EPOCHS = int(args.epochs)
 DIST = int(args.distance)
 NODES = int(args.nodes)
+DATA_PATH = str(args.data)
 
 torch.manual_seed(0)
 
@@ -46,7 +48,7 @@ parquet_path = f"animals_d{DIST}_nodes{NODES}_classified{CLASSIFIED}.parquet"
 
 if not os.path.exists(parquet_path):
     print(f"Creating {parquet_path}")
-    animals_parquet(DIST, nodes=NODES, classified=CLASSIFIED)
+    animals_parquet(DIST, nodes=NODES, classified=CLASSIFIED, data_path=DATA_PATH)
 
 data = AnimalsDatasetParquet(parquet_path)
 

@@ -7,7 +7,7 @@ import torch
 import os
 
 
-def animals_parquet(dist=15, nodes=20, classified=False):
+def animals_parquet(dist=15, nodes=20, classified=False, data_path="Animals"):
     data = AnimalsDatasetImage("Animals", distance=15)
 
     names = ['y', 'x'] + [f"feature_{i}" for i in range(128)]
