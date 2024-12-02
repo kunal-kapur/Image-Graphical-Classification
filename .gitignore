@@ -8,4 +8,5 @@ example*
 results
 graph_results
 images
-binary_results
+binary_results/*
+!binary_results/model_weights.pth
