@@ -18,12 +18,13 @@ torch.manual_seed(1)
 
 parser = argparse.ArgumentParser()
 
-parser.add_argument('-d', "--dataset", default="animals")   
 parser.add_argument("--distance", default=15)   
 parser.add_argument('-e', "--epochs", default=10)    
 parser.add_argument('-k', "--neighbors", default=3)    
 parser.add_argument('-l', "--lr", default=0.001)
 parser.add_argument('-s', "--schedule", default=6)      
+parser.add_argument('-c', "--classified", default=False)    
+parser.add_argument('-n', "--nodes", default=20)    
 
 args = parser.parse_args()
 K = int(args.neighbors)
@@ -35,18 +36,17 @@ LR = float(args.lr)
 BATCH_SIZE = 1
 EPOCHS = int(args.epochs)
 DIST = int(args.distance)
+NODES = int(args.nodes)
 
 torch.manual_seed(0)
 
 
-dataset_type = args.dataset
-
-
-parquet_path = f"{dataset_type}_{DIST}.parquet"
+CLASSIFIED = bool(args.classified)
+parquet_path = f"animals_d{DIST}_nodes{NODES}_classified{CLASSIFIED}.parquet"
 
 if not os.path.exists(parquet_path):
     print(f"Creating {parquet_path}")
-    animals_parquet(DIST)
+    animals_parquet(DIST, nodes=NODES, classified=CLASSIFIED)
 
 data = AnimalsDatasetParquet(parquet_path)
 
@@ -153,7 +153,7 @@ for class_name in sorted(class_totals.keys()):
     print(f"Class {class_name} Accuracy: {acc * 100:.2f}%")
 
 
-params = f"{dataset_type}_dist{DIST}_k{K}_epochs{EPOCHS}_schedule{SCHEDULE}"
+params = f"classified{CLASSIFIED}_nodes{NODES}_dist{DIST}_k{K}_epochs{EPOCHS}_schedule{SCHEDULE}"
 PATH = f"results/{params}"
 if not os.path.exists(PATH):
     os.makedirs(PATH)

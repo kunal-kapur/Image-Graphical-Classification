@@ -7,13 +7,13 @@ import torch
 import os
 
 
-def animals_parquet(dist=15):
+def animals_parquet(dist=15, nodes=20, classified=False):
     data = AnimalsDatasetImage("Animals", distance=15)
 
     names = ['y', 'x'] + [f"feature_{i}" for i in range(128)]
 
     # Initialize PyArrow table writer
-    parquet_file = f'animals_{dist}.parquet'
+    parquet_file = f'animals_d{dist}_nodes{nodes}_classified{classified}.parquet'
 
     if os.path.exists(parquet_file):
         print("CHECK DATA IF DATA CAN BE DELTED")
@@ -25,8 +25,10 @@ def animals_parquet(dist=15):
 
         if loc is None:
             continue
-        loc = loc[0:20]
-        description = description[0:20]
+        AMOUNT = nodes
+
+        loc = loc[0:AMOUNT]
+        description = description[0:AMOUNT]
         combined = torch.concat((loc, description), dim=1).detach().numpy()
 
         paths = [path] * combined.shape[0]

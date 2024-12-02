@@ -4,10 +4,6 @@ from scipy import signal
 from scipy import *
 import numpy as np
 from PIL import Image
-##############################################
-### Provided code - nothing to change here ###
-##############################################
-
 
 def plot_inlier_matches(ax, img1, img2, inliers):
   """

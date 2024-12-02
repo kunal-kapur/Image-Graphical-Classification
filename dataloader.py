@@ -13,6 +13,7 @@ from helpers import compute_harris_response, get_harris_points
 import pandas as pd
 from typing import Union, Tuple
 from torch.types import Tensor
+from object_detector import MLP
 
 
 class AnimalsDatasetParquet(Dataset):
@@ -62,8 +63,7 @@ class AnimalsDatasetParquet(Dataset):
 
 class AnimalsDatasetImage(Dataset):
     """Loading dataset by images"""
-    def __init__(self, path, distance=10):
-        
+    def __init__(self, path, distance=10, classify=False):
         self.distance = distance
         self.image_paths = []
         self.mapping = {0:"cat", 1: "dog", 2: "snake"}
@@ -76,6 +76,12 @@ class AnimalsDatasetImage(Dataset):
 
         for i in os.listdir(os.path.join(path, "snakes")):
             self.image_paths.append((os.path.join(path, "snakes", i), 2))
+
+        self.model = None
+        if classify is True:
+            self.model = MLP()
+            self.model.load_state_dict(torch.load(os.path.join("binary_results",
+                                                "model_weights.pth"))) 
 
     def __len__(self):
         return len(self.image_paths)
@@ -148,6 +154,17 @@ class AnimalsDatasetImage(Dataset):
         pixel_locations = keypoints # take x, y coordinates
         desc = self._get_descriptors(img=tensor_image.squeeze(dim=0).squeeze(dim=0), 
                                      keypoints=pixel_locations)
+
+        # Apply the mask to filter pixel_locations, desc, and img_path
+        if self.model is not None:
+            # Get classification results
+            classifications = self.model(desc)  # Assuming it returns an n-sized tensor of 0s and 1s
+            # Mask for classifications where the result is 1
+            mask = classifications == 1  # Create a boolean mask
+            pixel_locations = pixel_locations[mask]
+            desc = desc[mask]
+            img_path = [img_path[i] for i in range(len(img_path)) if mask[i]]
+            label = [label[i] for i in range(len(img_path)) if mask[i]]
         return  pixel_locations, desc, label, img_path
     
 
