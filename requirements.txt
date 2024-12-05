@@ -6,4 +6,4 @@ kornia
 pandas
 jupyterlab
 torch_geometric
-lighting
+pyarrow
