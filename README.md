@@ -7,7 +7,7 @@ To see results from this project see the report.
 
 Getting started 
 
-First create a virtual environment:
+First create a virtual environment using python3.10:
 
 ```console
 python -m venv .venv
